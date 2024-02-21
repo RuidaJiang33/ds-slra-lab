@@ -20,6 +20,8 @@
     "inlineSources": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
     "typeRoots": [
       "./node_modules/@types"
     ]
@@ -27,5 +29,8 @@
   "exclude": [
     "node_modules",
     "cdk.out"
-  ]
+  ],
+  "include": [
+    "shared/*.json"
+  ],
 }
