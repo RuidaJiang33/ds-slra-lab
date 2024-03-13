@@ -22,6 +22,7 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.67.0",
     "@aws-sdk/client-sqs": "^3.360.0",
+    "@aws-sdk/client-translate": "^3.529.1",
     "@aws-sdk/lib-dynamodb": "^3.79.0",
     "@aws-sdk/util-dynamodb": "^3.303.0",
     "ajv": "^8.12.0",
