@@ -2,11 +2,13 @@ import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { TranslateClient, TranslateTextCommand } from "@aws-sdk/client-translate";
+import 'source-map-support/register';
 
 const ddbDocClient = createDDbDocClient();
 const translateClient = new TranslateClient({});
 
 export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // CHANGED
+
   try {
     console.log("Event: ", event);
     const movieId = event.pathParameters?.movieId ? parseInt(event.pathParameters.movieId) : null;
@@ -27,28 +29,30 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
         Key: { movieId, reviewerName },
       }));
 
-    if (!review.Item) {
+    if (!review.Item || !review.Item.content) {
       return {
         statusCode: 404,
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ Message: "Review not found." }),
+        body: JSON.stringify({ Message: "Review content not found or empty." }),
       };
     }
 
-    // 使用 Amazon Translate 翻译评论
-    const translatedTextResponse = await translateClient.send(
-      new TranslateTextCommand({
-        Text: review.Item.reviewContent,
-        SourceLanguageCode: 'auto',
-        TargetLanguageCode: languageCode,
-      }));
+    //使用 Amazon Translate 翻译评论
+    const translateCommand = new TranslateTextCommand({
+      Text: review.Item.content, // 待翻译的文本
+      SourceLanguageCode: 'auto', // 源语言代码，'auto'表示自动检测
+      TargetLanguageCode: languageCode, // 目标语言代码
+    });
 
-      let body = {
-        originalReview: review.Item,
-        translatedReview: translatedTextResponse.TranslatedText,
-      };
+    const translatedTextResponse = await translateClient.send(translateCommand);
+
+
+    let body = {
+      originalReview: review.Item,
+      translatedReview: translatedTextResponse.TranslatedText,
+    };
 
     return {
       statusCode: 200,
@@ -60,7 +64,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
   } catch (error: any) {
     console.log(JSON.stringify(error));
     return {
-      statusCode: 500,
+      statusCode: 400,
       headers: {
         "content-type": "application/json",
       },

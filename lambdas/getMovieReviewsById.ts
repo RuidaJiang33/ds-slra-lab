@@ -11,6 +11,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {    
     const movieId = parameters?.movieId ? parseInt(parameters.movieId) : undefined;
     const queryStringParameters = event.queryStringParameters;
     const minRating = queryStringParameters?.minRating ? parseInt(queryStringParameters.minRating) : undefined;
+    const year = queryStringParameters?.year;
 
     if (!movieId) {
       return {
@@ -29,11 +30,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {    
         ":movieId": movieId,
       },
     };
-
+    commandInput.ExpressionAttributeValues = commandInput.ExpressionAttributeValues || {};
+    
     if (minRating !== undefined) {
-      commandInput.ExpressionAttributeValues = commandInput.ExpressionAttributeValues || {};
       commandInput.FilterExpression = "rating >= :minRating";
       commandInput.ExpressionAttributeValues[":minRating"] = minRating;
+    }
+
+    if (year) {
+      commandInput.ExpressionAttributeValues[":year"] = `${year}`; // DynamoDB expects string type for begins_with function
+      commandInput.FilterExpression = (commandInput.FilterExpression ? commandInput.FilterExpression + " AND " : "") + "begins_with(reviewDate, :year)";
     }
 
     const reviewsCommandOutput = await ddbDocClient.send(

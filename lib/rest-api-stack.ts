@@ -8,9 +8,16 @@ import { Construct } from "constructs";
 import { generateBatch } from "../shared/util";
 import { movies, movieCasts, movieReviews } from "../seed/movies";
 import * as apig from "aws-cdk-lib/aws-apigateway";
-import * as iam from 'aws-cdk-lib/aws-iam';
+import { Aws } from "aws-cdk-lib";
+import { UserPool } from "aws-cdk-lib/aws-cognito";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as node from "aws-cdk-lib/aws-lambda-nodejs";
 
 export class RestAPIStack extends cdk.Stack {
+  private auth: apig.IResource;
+  private userPoolId: string;
+  private userPoolClientId: string;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -48,6 +55,11 @@ export class RestAPIStack extends cdk.Stack {
       partitionKey: { name: 'reviewerName', type: dynamodb.AttributeType.STRING },
     });
 
+    movieReviewsTable.addGlobalSecondaryIndex({
+      indexName: 'MovieIdReviewDateIndex',
+      partitionKey: { name: 'movieId', type: dynamodb.AttributeType.NUMBER },
+      sortKey: { name: 'reviewDate', type: dynamodb.AttributeType.STRING },
+    });
 
     // Functions 
     const getMovieByIdFn = new lambdanode.NodejsFunction(
@@ -139,6 +151,18 @@ export class RestAPIStack extends cdk.Stack {
       },
     });
 
+    const getMovieReviewsByIdAndYearFn = new lambdanode.NodejsFunction(this, "GetMovieReviewsByIdAndYearFn", {
+      architecture: lambda.Architecture.ARM_64,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      entry: `${__dirname}/../lambdas/getMovieReviewsByIdAndYear.ts`,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      environment: {
+        TABLE_NAME: movieReviewsTable.tableName,
+        REGION: "eu-west-1",
+      },
+    });
+
     const getMovieReviewTranslationFn = new lambdanode.NodejsFunction(this, "GetMovieReviewTranslationFn", {
       architecture: lambda.Architecture.ARM_64,
       runtime: lambda.Runtime.NODEJS_18_X,
@@ -151,13 +175,10 @@ export class RestAPIStack extends cdk.Stack {
       },
     });
 
-    // 创建一个 IAM 策略声明，授权翻译操作
     const translatePolicyStatement = new iam.PolicyStatement({
       actions: ['translate:TranslateText'],
-      resources: ['*'], // 或者更具体的资源 ARN
+      resources: ['*'],
     });
-
-    // 将策略声明附加到函数的执行角色上
     getMovieReviewTranslationFn.addToRolePolicy(translatePolicyStatement);
 
     const newMovieFn = new lambdanode.NodejsFunction(this, "AddMovieFn", {
@@ -228,10 +249,12 @@ export class RestAPIStack extends cdk.Stack {
     movieReviewsTable.grantReadWriteData(updateMovieReviewFn);
     movieReviewsTable.grantReadData(getMovieReviewsByReviewerFn);
     movieReviewsTable.grantReadData(getMovieReviewTranslationFn);
+    movieReviewsTable.grantReadData(getMovieReviewsByIdAndYearFn);
 
     // REST API 
     const api = new apig.RestApi(this, "RestAPI", {
       description: "demo api",
+      endpointTypes: [apig.EndpointType.REGIONAL],
       deployOptions: {
         stageName: "dev",
       },
@@ -239,10 +262,68 @@ export class RestAPIStack extends cdk.Stack {
         allowHeaders: ["Content-Type", "X-Amz-Date"],
         allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
         allowCredentials: true,
-        allowOrigins: ["*"],
+        allowOrigins: apig.Cors.ALL_ORIGINS,
       },
     });
 
+    const userPool = new UserPool(this, "UserPool", {
+      signInAliases: { username: true, email: true },
+      selfSignUpEnabled: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    this.userPoolId = userPool.userPoolId;
+
+    const appClient = userPool.addClient("AppClient", {
+      authFlows: { userPassword: true },
+    });
+
+    this.userPoolClientId = appClient.userPoolClientId;
+
+    this.auth = api.root.addResource("auth");
+
+    this.addAuthRoute(
+      "signup",
+      "POST",
+      "SignupFn",
+      'signup.ts'
+    );
+
+    this.addAuthRoute(
+      "confirm_signup", 
+      "POST",
+      "ConfirmFn",
+      "confirm-signup.ts"
+    );
+
+    this.addAuthRoute('signout', 'GET', 'SignoutFn', 'signout.ts');
+    this.addAuthRoute('signin', 'POST', 'SigninFn', 'signin.ts');
+
+    const appCommonFnProps = {
+      architecture: lambda.Architecture.ARM_64,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "handler",
+      environment: {
+        USER_POOL_ID: this.userPoolId,
+        CLIENT_ID: this.userPoolClientId,
+        REGION: cdk.Aws.REGION,
+      },
+    };
+
+    const authorizerFn = new node.NodejsFunction(this, "AuthorizerFn", {
+      ...appCommonFnProps,
+      entry: "./lambdas/auth/authorizer.ts",
+    });
+
+    const apiRequestAuthorizer = new apig.RequestAuthorizer(this, "APIRequestAuthorizer", {
+      handler: authorizerFn,
+      identitySources: [apig.IdentitySource.header("Authorization")], // 使用 Authorization 头部作为身份源
+      resultsCacheTtl: cdk.Duration.minutes(0), // 禁用缓存
+    });
+
+    // end points
     const moviesEndpoint = api.root.addResource("movies");
     moviesEndpoint.addMethod(
       "GET",
@@ -257,7 +338,11 @@ export class RestAPIStack extends cdk.Stack {
 
     moviesEndpoint.addMethod(
       "POST",
-      new apig.LambdaIntegration(newMovieFn, { proxy: true })
+      new apig.LambdaIntegration(newMovieFn, { proxy: true }),
+      {
+        authorizer: apiRequestAuthorizer,
+        authorizationType: apig.AuthorizationType.CUSTOM,
+      }
     );
 
     const movieCastEndpoint = moviesEndpoint.addResource("cast");
@@ -269,7 +354,11 @@ export class RestAPIStack extends cdk.Stack {
     const movieReviewsEndpoint = moviesEndpoint.addResource("reviews");
     movieReviewsEndpoint.addMethod(
       "POST",
-      new apig.LambdaIntegration(newMovieReviewFn, { proxy: true })
+      new apig.LambdaIntegration(newMovieReviewFn, { proxy: true }),
+      {
+        authorizer: apiRequestAuthorizer,
+        authorizationType: apig.AuthorizationType.CUSTOM,
+      }
     )
 
     const movieSpecificReviewsEndpoint = movieEndpoint.addResource("reviews");
@@ -286,8 +375,18 @@ export class RestAPIStack extends cdk.Stack {
 
     reviewByIdAndReviewerEndpoint.addMethod(
       "PUT",
-      new apig.LambdaIntegration(updateMovieReviewFn, { proxy: true })
+      new apig.LambdaIntegration(updateMovieReviewFn, { proxy: true }),
+      {
+        authorizer: apiRequestAuthorizer,
+        authorizationType: apig.AuthorizationType.CUSTOM,
+      }
     );
+    
+    // const reviewByIdAndYearEndpoint = movieSpecificReviewsEndpoint.addResource("{year}");
+    // reviewByIdAndYearEndpoint.addMethod(
+    //   "GET",
+    //   new apig.LambdaIntegration(getMovieReviewsByIdAndYearFn, { proxy: true })
+    // );
 
     const reviewsByReviewerEndpoint = api.root.addResource("reviews").addResource("{reviewerName}");
     reviewsByReviewerEndpoint.addMethod(
@@ -300,5 +399,35 @@ export class RestAPIStack extends cdk.Stack {
       "GET",
       new apig.LambdaIntegration(getMovieReviewTranslationFn, { proxy: true })
     );
+  }
+
+  private addAuthRoute(
+    resourceName: string,
+    method: string,
+    fnName: string,
+    fnEntry: string,
+    allowCognitoAccess?: boolean
+  ): void {
+    const commonFnProps = {
+      architecture: lambda.Architecture.ARM_64,
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+      runtime: lambda.Runtime.NODEJS_18_X,
+      handler: "handler",
+      environment: {
+        USER_POOL_ID: this.userPoolId,
+        CLIENT_ID: this.userPoolClientId,
+        REGION: cdk.Aws.REGION
+      },
+    };
+    
+    const resource = this.auth.addResource(resourceName);
+    
+    const fn = new node.NodejsFunction(this, fnName, {
+      ...commonFnProps,
+      entry: `${__dirname}/../lambdas/auth/${fnEntry}`,
+    });
+
+    resource.addMethod(method, new apig.LambdaIntegration(fn));
   }
 }
