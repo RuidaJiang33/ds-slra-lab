@@ -20,21 +20,17 @@ e.g.
 + GET /reviews/{reviewerName} - Get all the reviews written by a specific reviewer.
 + GET /reviews/{reviewerName}/{movieId}/translation?language=code - Get a translated version of a movie review using the movie ID and reviewer name as the identifier.
 
-![image-20240317141208650](C:\Users\江睿达\AppData\Roaming\Typora\typora-user-images\image-20240317141208650.png)
+![image-20240317141208650](E:\SETU\Distributed Systems\movies-app\images\image-20240317141208650.png)
 
-![image-20240317141223440](C:\Users\江睿达\AppData\Roaming\Typora\typora-user-images\image-20240317141223440.png)
+![image-20240317141223440](E:\SETU\Distributed Systems\movies-app\images\image-20240317141223440.png)
 
-![image-20240317141233172](C:\Users\江睿达\AppData\Roaming\Typora\typora-user-images\image-20240317141233172.png)
-
-
+![image-20240317141233172](E:\SETU\Distributed Systems\movies-app\images\image-20240317141233172.png)
 
 ### Authentication (if relevant).
 
-![image-20240317141927942](C:\Users\江睿达\AppData\Roaming\Typora\typora-user-images\image-20240317141927942.png)
+![image-20240317141337135](E:\SETU\Distributed Systems\movies-app\images\image-20240317141337135.png)
 
-![image-20240317141337135](C:\Users\江睿达\AppData\Roaming\Typora\typora-user-images\image-20240317141337135.png)
-
-![](./images/pool.png)
+![image-20240317141927942](E:\SETU\Distributed Systems\movies-app\images\image-20240317141927942.png)
 
 ### Independent learning (If relevant).
 
