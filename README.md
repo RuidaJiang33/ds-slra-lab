@@ -16,7 +16,7 @@ e.g.
 + GET /movies/{movieId}/reviews?minRating=n - Get all the reviews for the film with the specified ID whose rating was higher than the minRating.
 + GET /movies/{movieId}/reviews/{reviewerName} - Get the review for the movie with the specified movie ID and written by the named reviewer.
 + PUT /movies/{movieId}/reviews/{reviewerName} - Update the text of a review.
-+ GET /movies/{movieId}/reviews/{year} - Get the reviews written in a specific year for a specific movie.
++ GET /movies/{movieId}/reviews?year=n - Get the reviews written in a specific year for a specific movie.
 + GET /reviews/{reviewerName} - Get all the reviews written by a specific reviewer.
 + GET /reviews/{reviewerName}/{movieId}/translation?language=code - Get a translated version of a movie review using the movie ID and reviewer name as the identifier.
 
