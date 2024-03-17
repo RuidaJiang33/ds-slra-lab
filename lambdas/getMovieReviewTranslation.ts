@@ -39,11 +39,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event, context) => { // 
       };
     }
 
-    //使用 Amazon Translate 翻译评论
+
     const translateCommand = new TranslateTextCommand({
-      Text: review.Item.content, // 待翻译的文本
-      SourceLanguageCode: 'auto', // 源语言代码，'auto'表示自动检测
-      TargetLanguageCode: languageCode, // 目标语言代码
+      Text: review.Item.content, 
+      SourceLanguageCode: 'auto', 
+      TargetLanguageCode: languageCode,
     });
 
     const translatedTextResponse = await translateClient.send(translateCommand);
