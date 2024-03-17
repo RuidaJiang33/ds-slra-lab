@@ -20,17 +20,17 @@ e.g.
 + GET /reviews/{reviewerName} - Get all the reviews written by a specific reviewer.
 + GET /reviews/{reviewerName}/{movieId}/translation?language=code - Get a translated version of a movie review using the movie ID and reviewer name as the identifier.
 
-![image1](images\image1.png)
+![image1](images/image1.png)
 
-![image2](images\image2.png)
+![image2](images/image2.png)
 
-![image3](images\image3.png)
+![image3](images/image3.png)
 
 ### Authentication (if relevant).
 
-![image4](images\image4.png)
+![image4](images/image4.png)
 
-![image5](images\image5.png)
+![image5](images/image5.png)
 
 ### Independent learning (If relevant).
 
